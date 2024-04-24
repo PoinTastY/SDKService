@@ -6,6 +6,7 @@ namespace SDKService
 {
     public partial class SDKInstances : ServiceBase
     {
+        private TCPServer server;
         public SDKInstances()
         {
             InitializeComponent();
@@ -18,6 +19,7 @@ namespace SDKService
             }
                 eventLog1.Source = "SDKInstances";
                 eventLog1.Log = "Application";
+            server = new TCPServer(42069, eventLog1);
         }
 
         protected override void OnStart(string[] args)
@@ -48,19 +50,24 @@ namespace SDKService
                 }
                 else
                 {
-                    Empresa empresa = new Empresa();
                     eventLog1.WriteEntry("Empresa abierta exitosamente");
-                    if(empresa.PrimerEmpresa()!= 0)
+                    Empresa empresa = new Empresa();
+                    if (empresa.PrimerEmpresa() != 0)
                     {
                         eventLog1.WriteEntry("Hubo un error seleccionando la primer empresa");
                     }
                     else
                     {
-                        eventLog1.WriteEntry($"Nombre primer empresa: {empresa.NombreEmpresa}");
+                        eventLog1.WriteEntry($"Primer Empresa: {empresa.IdEmpresa}, {empresa.NombreEmpresa}, {empresa.DirEmpresa}");
+
                     }
                 }
+                server.Start();
+                eventLog1.WriteEntry("Server should be running");
+
             }
         }
+
 
         protected override void OnStop()
         {
@@ -68,9 +75,11 @@ namespace SDKService
 
             //complementarios (igual deben estar xD)
             SDK.fCierraEmpresa();
+            eventLog1.WriteEntry("Empresa cerrada");
             SDK.fTerminaSDK();
-
             eventLog1.WriteEntry("SDK Liberado");
+            server.Stop();
+            eventLog1.WriteEntry("TCPServer stopped");
         }
 
         private void eventLog1_EntryWritten(object sender, EntryWrittenEventArgs e)

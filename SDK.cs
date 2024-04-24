@@ -44,6 +44,11 @@ namespace SDKService
 
         #endregion
 
+        #region Manejo de Documentos
+
+
+        #endregion
+
         //Manejo de Errores
         public static string rError(int iError)
         {

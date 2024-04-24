@@ -43,6 +43,7 @@
             this.serviceInstaller1.Description = "Instancias SDK Compaqi";
             this.serviceInstaller1.DisplayName = "SDKInstances";
             this.serviceInstaller1.ServiceName = "SDKInstances";
+            this.serviceInstaller1.StartType = System.ServiceProcess.ServiceStartMode.Automatic;
             this.serviceInstaller1.AfterInstall += new System.Configuration.Install.InstallEventHandler(this.serviceInstaller1_AfterInstall);
             // 
             // ProjectInstaller

@@ -19,8 +19,14 @@ namespace SDKService.Models
             return lError;
         }
 
+        public int SiguienteEmpresa()
+        {
+            int lError = SDK.fPosSiguienteEmpresa(ref _IdEmpresa, _nombreEmpresa, _dirEmpresa);
+            return lError;
+        }
+
         public int IdEmpresa {  get { return _IdEmpresa; } }
         public String NombreEmpresa { get { return _nombreEmpresa.ToString();  } }
-        public String DirEmpresa { get { return _nombreEmpresa.ToString();  } }
+        public String DirEmpresa { get { return _dirEmpresa.ToString();  } }
     }
 }

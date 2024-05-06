@@ -46,7 +46,14 @@ namespace SDKService
 
         #region Manejo de Documentos
 
+        [DllImport("MGWServicios.dll")]
+        public static extern int fSiguienteFolio(string codConcepto, StringBuilder serie, ref double folio);
 
+        [DllImport("MGWServicios.dll")]
+        public static extern int fAltaDocumento(ref int idDocumento, ref tDocumento atDocumento);
+
+        [DllImport("MGWServicios.dll")]
+        public static extern int fAltaMovimiento(int aIdDocumento, ref int aIdMovimiento, ref tMovimiento astMovimiento);
         #endregion
 
         //Manejo de Errores

@@ -53,7 +53,7 @@ public class TCPServer
                 eventLog.WriteEntry("Mensaje recibido: " + request, EventLogEntryType.Information);
 
                 // Procesar el mensaje recibido
-                string response = JsonConvert.SerializeObject(GetEmpresa(eventLog));
+                string response = JsonConvert.SerializeObject(GetEmpresas(eventLog));
 
                 // Enviar la respuesta al cliente
                 byte[] responseBuffer = Encoding.ASCII.GetBytes(response);
@@ -68,7 +68,9 @@ public class TCPServer
             eventLog.WriteEntry("Error en el servidor TCP: " + ex.Message, EventLogEntryType.Error);
         }
     }
-    public static Empresa GetEmpresa(EventLog log)
+
+    #region Funciones
+    public static Empresa GetEmpresas(EventLog log)
     {
         var empresa = new Empresa();
 
@@ -82,7 +84,7 @@ public class TCPServer
         }
         return empresa;
     }
-
+    #endregion
 
     public void Stop()
     {

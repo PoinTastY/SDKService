@@ -62,7 +62,7 @@ public class TCPServer
                         GetEmpresas(eventLog);
                         break;
                     case 1:
-                        SDK.tDocumento doc = (eventLog, JsonConvert.DeserializeObject<SDK.tDocumento>(newreq.ObjectRequest));
+                        SDK.tDocumento doc = GenerateDocument(eventLog, JsonConvert.DeserializeObject<SDK.tDocumento>(newreq.ObjectRequest));
                         response.ResponseCode = doc.aFolio;
                         response.ResponseContent = JsonConvert.SerializeObject(doc);
                         break;

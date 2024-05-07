@@ -63,7 +63,7 @@ namespace SDKService
                     }
                 }
                 server.Start();
-                eventLog1.WriteEntry("Server should be running");
+                eventLog1.WriteEntry("Starting tcp server...");
 
             }
         }

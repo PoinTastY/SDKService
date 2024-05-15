@@ -1,5 +1,8 @@
-﻿using SDKService.Models;
+﻿using Newtonsoft.Json;
+using SDKService.Models;
+using System;
 using System.Diagnostics;
+using System.IO;
 using System.ServiceProcess;
 
 namespace SDKService
@@ -25,17 +28,15 @@ namespace SDKService
         protected override void OnStart(string[] args)
         {
             eventLog1.WriteEntry("Iniciando Instancias del SDK de Contpaqi");
-            string rutaBinarios = @"C:\Program Files (x86)\Compac\COMERCIAL";
-            string nombrePAQ = "CONTPAQ I COMERCIAL";
-            string rutaEmpresa = "C:\\Compac\\Empresas\\adIndex_Computacion";
+            Config config = ReadConfig("config.json");
             int lError = 0;
-            SDK.SetCurrentDirectory(rutaBinarios);
+            SDK.SetCurrentDirectory(config.RutaBinarios);
 
             //si queremos iniciar sesion, debe ser antes del setnombre paq
-            SDK.fInicioSesionSDK("KEVIN", "index");
+            SDK.fInicioSesionSDK(config.User, config.Password);
 
             //indicar con que sistema se va a trabajar
-            lError = SDK.fSetNombrePAQ(nombrePAQ);
+            lError = SDK.fSetNombrePAQ(config.NombrePAQ);
             if (lError != 0)
             {
                 SDK.rError(lError);
@@ -43,7 +44,7 @@ namespace SDKService
             else
             {
                 //indicar la ruta de la empresa a utilizar
-                lError = SDK.fAbreEmpresa(rutaEmpresa);
+                lError = SDK.fAbreEmpresa(config.RutaEmpresa);
                 if (lError != 0)
                 {
                     eventLog1.WriteEntry($"Error: {SDK.rError(lError)}");
@@ -51,20 +52,9 @@ namespace SDKService
                 else
                 {
                     eventLog1.WriteEntry("Empresa abierta exitosamente");
-                    Empresa empresa = new Empresa();
-                    if (empresa.PrimerEmpresa() != 0)
-                    {
-                        eventLog1.WriteEntry("Hubo un error seleccionando la primer empresa");
-                    }
-                    else
-                    {
-                        eventLog1.WriteEntry($"Primer Empresa: {empresa.IdEmpresa}, {empresa.NombreEmpresa}, {empresa.DirEmpresa}");
-
-                    }
                 }
-                server.Start();
                 eventLog1.WriteEntry("Starting tcp server...");
-
+                server.Start();
             }
         }
 
@@ -80,6 +70,44 @@ namespace SDKService
             eventLog1.WriteEntry("SDK Liberado");
             server.Stop();
             eventLog1.WriteEntry("TCPServer stopped");
+        }
+
+        private Config ReadConfig(string filePath)
+        {
+            try
+            {
+                // Verificar si el archivo existe
+                if (!File.Exists(filePath))
+                {
+                    eventLog1.WriteEntry($"El archivo {filePath} no existe.");
+                    return null;
+                }
+
+                // Leer el contenido del archivo
+                string jsonString = File.ReadAllText(filePath);
+
+                // Verificar que el contenido no sea nulo ni vacío
+                if (string.IsNullOrWhiteSpace(jsonString))
+                {
+                    eventLog1.WriteEntry("El archivo de configuración está vacío.");
+                    return null;
+                }
+
+                // Deserializar el contenido en un objeto Config
+                Config config = JsonConvert.DeserializeObject<Config>(jsonString);
+
+                return config;
+            }
+            catch (JsonException jsonEx)
+            {
+                eventLog1.WriteEntry($"Error de formato JSON: {jsonEx.Message}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                eventLog1.WriteEntry($"Error al leer el archivo de configuración: {ex.Message}");
+                return null;
+            }
         }
 
         private void eventLog1_EntryWritten(object sender, EntryWrittenEventArgs e)

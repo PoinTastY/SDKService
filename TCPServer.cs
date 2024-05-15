@@ -5,7 +5,6 @@ using System.Text;
 using System.Diagnostics;
 using System.Threading;
 using SDKService.Models;
-using SDKService;
 using Newtonsoft.Json;
 using System.IO;
 
@@ -59,10 +58,10 @@ public class TCPServer
                 switch (newreq.Work)
                 {
                     case 0:
-                        GetEmpresas(eventLog);
+                        
                         break;
-                    case 1:
-                        SDK.tDocumento doc = GenerateDocument(eventLog, JsonConvert.DeserializeObject<SDK.tDocumento>(newreq.ObjectRequest));
+                    case 1://agenerar remision
+                        SDK.tDocumento doc = GenerateRemision(eventLog, JsonConvert.DeserializeObject<SDK.tDocumento>(newreq.ObjectRequest));
                         response.ResponseCode = doc.aFolio;
                         response.ResponseContent = JsonConvert.SerializeObject(doc);
                         break;
@@ -91,22 +90,9 @@ public class TCPServer
     }
 
     #region Funciones
-    private static Empresa GetEmpresas(EventLog log)
-    {
-        var empresa = new Empresa();
+    
 
-        if (empresa.SiguienteEmpresa() != 0)
-        {
-            log.WriteEntry("Hubo un error seleccionando la siguiente empresa");
-        }
-        else
-        {
-            log.WriteEntry($"Siguiente Empresa: {empresa.IdEmpresa}, {empresa.NombreEmpresa}, {empresa.DirEmpresa}");
-        }
-        return empresa;
-    }
-
-    private static SDK.tDocumento GenerateDocument(EventLog log, SDK.tDocumento lDocto)
+    private static SDK.tDocumento GenerateRemision(EventLog log, SDK.tDocumento lDocto)
     {
         int lError = 0;
         StringBuilder serie = new StringBuilder("R");
@@ -127,14 +113,8 @@ public class TCPServer
         }
         else
         {
-            //log.WriteEntry($"Siguiente Folio encontrado: {folio}");
-            //lDocto.aCodConcepto = codConcepto;
-            //lDocto.aCodigoCteProv = codCte;
-            //lDocto.aFecha = DateTime.Today.ToString("MM/dd/yyyy");
             lDocto.aFolio = folio;
-            //lDocto.aNumMoneda = 1;
-            //lDocto.aSerie = serie.ToString();
-            //lDocto.aTipoCambio = 1;
+           
 
             lError = SDK.fAltaDocumento(ref idDocto, ref lDocto);
             if(lError != 0)
@@ -144,22 +124,6 @@ public class TCPServer
             else
             {
                 log.WriteEntry($"Documento Generado Exitosamente: id doc: {idDocto}");
-
-
-                //lMovto.aCodAlmacen = "1";
-                //lMovto.aCodProdSer = codProducto;
-                //lMovto.aPrecio = 200;
-                //lMovto.aUnidades = 2;
-
-                //lError = SDK.fAltaMovimiento(idDocto, ref idMovto, ref lMovto);
-                //if (lError != 0)
-                //{
-                //    log.WriteEntry($"Problema en Alta Movimiento: {SDK.rError(lError)}");
-                //}
-                //else
-                //{
-                //    log.WriteEntry("Documento Generado Exitosamente");
-                //}
                 return lDocto;
             }
         }

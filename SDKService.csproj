@@ -65,6 +65,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Models\Config.cs" />
+    <Compile Include="Models\Entities\CasoClinico.cs" />
+    <Compile Include="Models\Entities\Diagnostico.cs" />
+    <Compile Include="Models\Entities\Medic.cs" />
+    <Compile Include="Models\Entities\Patient.cs" />
+    <Compile Include="Models\Entities\Rooms.cs" />
     <Compile Include="Models\Request.cs" />
     <Compile Include="Models\Response.cs" />
     <Compile Include="TCPServer.cs" />
@@ -86,7 +91,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="config.json" />
+    <None Include="config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>

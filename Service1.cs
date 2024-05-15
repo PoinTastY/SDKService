@@ -16,7 +16,8 @@ namespace SDKService
 
             eventLog1 = new System.Diagnostics.EventLog();
             if (!System.Diagnostics.EventLog.SourceExists("SDKInstances"))
-            {
+            { 
+
                 System.Diagnostics.EventLog.CreateEventSource(
                     "SDKInstances", "Application");
             }
@@ -27,35 +28,56 @@ namespace SDKService
 
         protected override void OnStart(string[] args)
         {
-            eventLog1.WriteEntry("Iniciando Instancias del SDK de Contpaqi");
-            Config config = ReadConfig("config.json");
-            int lError = 0;
-            SDK.SetCurrentDirectory(config.RutaBinarios);
-
-            //si queremos iniciar sesion, debe ser antes del setnombre paq
-            SDK.fInicioSesionSDK(config.User, config.Password);
-
-            //indicar con que sistema se va a trabajar
-            lError = SDK.fSetNombrePAQ(config.NombrePAQ);
-            if (lError != 0)
+            try
             {
-                SDK.rError(lError);
-            }
-            else
-            {
-                //indicar la ruta de la empresa a utilizar
-                lError = SDK.fAbreEmpresa(config.RutaEmpresa);
+                eventLog1.WriteEntry("Iniciando Instancias del SDK de Contpaqi");
+                string baseDirectory = AppContext.BaseDirectory;
+                string filePath = Path.Combine(baseDirectory, "config.json"); // Ruta completa al archivo JSON
+                eventLog1.WriteEntry($"Ruta de configuracion: {filePath}");
+
+                Config config = ReadConfig(filePath);
+                SDK.SetCurrentDirectory(config.RutaBinarios);
+                eventLog1.WriteEntry($"Directorio establecido Exitosamente: Binarios:{config.RutaBinarios}, Empresa: {config.RutaEmpresa}");
+
+                int lError = 0;
+
+                try
+                {
+                    //si queremos iniciar sesion, debe ser antes del setnombre paq
+                    SDK.fInicioSesionSDK(config.User, config.Password);
+                }
+                catch(Exception ex)
+                {
+                    eventLog1.WriteEntry($"No se pudo Iniciar sesion en el SDK: {ex}");
+                }
+
+                //indicar con que sistema se va a trabajar
+                lError = SDK.fSetNombrePAQ(config.NombrePAQ);
                 if (lError != 0)
                 {
-                    eventLog1.WriteEntry($"Error: {SDK.rError(lError)}");
+                    SDK.rError(lError);
                 }
                 else
                 {
-                    eventLog1.WriteEntry("Empresa abierta exitosamente");
+                    //indicar la ruta de la empresa a utilizar
+                    lError = SDK.fAbreEmpresa(config.RutaEmpresa);
+                    if (lError != 0)
+                    {
+                        eventLog1.WriteEntry($"Error: {SDK.rError(lError)}");
+                    }
+                    else
+                    {
+                        eventLog1.WriteEntry("Empresa abierta exitosamente");
+                    }
+                    eventLog1.WriteEntry("Starting tcp server...");
+                    server.Start();
                 }
-                eventLog1.WriteEntry("Starting tcp server...");
-                server.Start();
+            }catch (Exception e)
+            {
+                eventLog1.WriteEntry($"Error: {e}");
+
             }
+            
         }
 
 

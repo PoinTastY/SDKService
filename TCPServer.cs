@@ -7,6 +7,7 @@ using System.Threading;
 using SDKService.Models;
 using Newtonsoft.Json;
 using System.IO;
+using StareMedic.Models.Entities;
 
 public class TCPServer
 {
@@ -61,7 +62,7 @@ public class TCPServer
                         
                         break;
                     case 1://agenerar remision
-                        SDK.tDocumento doc = GenerateRemision(eventLog, JsonConvert.DeserializeObject<SDK.tDocumento>(newreq.ObjectRequest));
+                        SDK.tDocumento doc = GenerateRemision(eventLog, newreq);
                         response.ResponseCode = doc.aFolio;
                         response.ResponseContent = JsonConvert.SerializeObject(doc);
                         break;
@@ -92,20 +93,44 @@ public class TCPServer
     #region Funciones
     
 
-    private static SDK.tDocumento GenerateRemision(EventLog log, SDK.tDocumento lDocto)
+    private static SDK.tDocumento GenerateRemision(EventLog log, Request req)
     {
-        int lError = 0;
-        StringBuilder serie = new StringBuilder("R");
+        #region UnpackJson
+
+        SDK.tDocumento lDocto = JsonConvert.DeserializeObject<SDK.tDocumento>(req.SerialDocto);
+        CasoClinico casoClinico = JsonConvert.DeserializeObject<CasoClinico>(req.SerialEntity1);
+        Patient patient = JsonConvert.DeserializeObject<Patient>(req.SerialEntity2);
+        Rooms room = JsonConvert.DeserializeObject<Rooms>(req.SerialEntity3);
+        Medic medic = JsonConvert.DeserializeObject<Medic>(req.SerialEntity4);
+        Diagnostico diagnostico = JsonConvert.DeserializeObject<Diagnostico>(req.SerialEntity5);
+
+        #endregion
+
+        int lError = 0;//4 error management
+
+        #region Find or Create Client
+
+        lError = SDK.fBuscaCteProv(lDocto.aCodigoCteProv);
+
+        if(lError != 0)
+        {
+            //asumimos que no existe, entonces creamos 
+            log.WriteEntry($"No se encontro la habitacion: {room.Nombre}, Intentando crearlo");
+            int aIdCteProv = 0;
+            SDK.ClienteProveedor cliente = new SDK.ClienteProveedor();
+            cliente.cRazonSocial = room.Nombre;
+            cliente.cCodigoCliente = lDocto.aCodigoCteProv;
+            lError = SDK.fAltaCteProv(ref aIdCteProv, cliente);
+        }
+
+        #endregion
+
+        #region Build Document
+        StringBuilder serie = new StringBuilder(lDocto.aSerie); //we need a string builder
         double folio = 0;
-        string codConcepto = "3";
-        //string codCte = "PUBLICO";
-        //string codProducto = "ALEXA";
         int idDocto = 0;
-        //int idMovto = 0;
 
-        //SDK.tMovimiento lMovto = new SDK.tMovimiento();
-
-        lError = SDK.fSiguienteFolio(codConcepto, serie, ref folio);
+        lError = SDK.fSiguienteFolio(lDocto.aCodConcepto, serie, ref folio);
         if (lError != 0)
         {
             log.WriteEntry($"Problema en obtencion de siguiente folio: {SDK.rError(lError)}");
@@ -123,10 +148,32 @@ public class TCPServer
             }
             else
             {
-                log.WriteEntry($"Documento Generado Exitosamente: id doc: {idDocto}");
+                log.WriteEntry($"Documento Generado Exitosamente: id doc: {lDocto.aFolio}");
+                //posicionar puntero en campo objetivo para actualizar los campos
+                lError = SDK.fPosUltimoDocumento();
+                if(lError != 0)
+                {
+                    log.WriteEntry($"No se encontro el documento para actualizar las tablas con los datos proporcionados: {SDK.rError(lError)}");
+                }
+                else
+                {
+                    SDK.fEditarDocumento();//may need to add another filter here just in case
+                    string observaciones = $"Paciente: {patient.Nombre}\nMedico: {medic.Nombre}\nDiagnostico: {diagnostico.Contenido}";
+                    lError = SDK.fSetDatoDocumento("cObservaciones", observaciones);
+                    if(lError != 0)
+                    {
+                        log.WriteEntry($"Error Actualizando el campo: Observaciones: {SDK.rError(lError)}");
+                        SDK.fCancelarModificacionDocumento();
+                    }
+                    else
+                    {
+                        SDK.fGuardaDocumento();
+                    }
+                }
                 return lDocto;
             }
         }
+        #endregion
         return lDocto;
 
         

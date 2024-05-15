@@ -369,7 +369,13 @@ namespace SDKService.Models
         public static extern int fCancelaDocumento();
 
         [DllImport("MGWServicios.dll")]
-        public static extern int fBuscarIdDocumento();
+        public static extern int fCancelarModificacionDocumento();
+
+        [DllImport("MGWServicios.dll")]
+        public static extern int fBuscarIdDocumento(int aIdDocumento);//Busca
+
+        [DllImport("MGWServicios.dll")]
+        public static extern int fPosUltimoDocumento();
 
 
         #endregion
@@ -379,7 +385,21 @@ namespace SDKService.Models
         public static extern int fAltaMovimiento(int aIdDocumento, ref int aIdMovimiento, ref tMovimiento astMovimiento);
         #endregion
 
-        //Manejo de Errores
+        #region Manejo de Clientes
+
+        [DllImport("MGWServicios.dll")]
+        public static extern int fBuscaIdCteProv(int aIdCteProv);
+
+        [DllImport("MGWServicios.dll")]
+        public static extern int fBuscaCteProv(string aBuscaCteProv);
+
+        [DllImport("MGWServicios.dll")]
+        public static extern int fAltaCteProv(ref int aIdCteProv, ClienteProveedor astCteProv);
+
+        #endregion
+
+
+        //  //Manejo de Errores
         public static string rError(int iError)
         {
             StringBuilder msj = new StringBuilder(512);

@@ -14,12 +14,14 @@ public class TCPServer
     private TcpListener listener;
     private EventLog eventLog;
     private Thread serverThread;
+    private bool interrupt;
 
     public TCPServer(int port, EventLog eventLog)
     {
         this.listener = new TcpListener(IPAddress.Any, port);
         this.eventLog = eventLog;
         this.serverThread = new Thread(ListenForClients);
+        this.interrupt = false;
     }
 
     public void Start()
@@ -42,71 +44,83 @@ public class TCPServer
         {
             listener.Start();
 
-            while (true)
+            while (!interrupt)
             {
-                TcpClient client = listener.AcceptTcpClient();
-                eventLog.WriteEntry("Cliente conectado desde " + ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString(), EventLogEntryType.Information);
-
-                Stream stream = client.GetStream();
-                MemoryStream memory = new MemoryStream();
-                byte[] buffer = new byte[4096];
-                int bytesRead = 0;
-                while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+                if (listener.Pending())
                 {
-                    memory.Write(buffer, 0, bytesRead);
-                    if (bytesRead < buffer.Length)
-                        break;
+                    TcpClient client = listener.AcceptTcpClient();
+                    eventLog.WriteEntry("Cliente conectado desde " + ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString(), EventLogEntryType.Information);
 
-                    byte[] newBuffer = new byte[buffer.Length * 2];
-                    Array.Copy(buffer, newBuffer, bytesRead);
-                    buffer = newBuffer;
+                    Stream stream = client.GetStream();
+                    MemoryStream memory = new MemoryStream();
+                    byte[] buffer = new byte[4096];
+                    int bytesRead = 0;
+                    while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        memory.Write(buffer, 0, bytesRead);
+                        if (bytesRead < buffer.Length)
+                            break;
+
+                        byte[] newBuffer = new byte[buffer.Length * 2];
+                        Array.Copy(buffer, newBuffer, bytesRead);
+                        buffer = newBuffer;
+                    }
+                    string RawRequest = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Request newreq = JsonConvert.DeserializeObject<Request>(RawRequest);
+
+                    // Procesar el mensaje recibido
+                    Response response = new Response();
+                    eventLog.WriteEntry($"Trabajo recibido: {newreq.Work}");
+                    switch (newreq.Work)
+                    {
+                        case 0:
+
+                            break;
+                        case 1://agenerar remision
+                            SDK.tDocumento doc = GenerateRemision(eventLog, newreq);
+                            if (doc.aFolio != 0)
+                                eventLog.WriteEntry($"Remision Generada Exitosamente, folio: {doc.aFolio}");
+                            else
+                                eventLog.WriteEntry("Parece que hubo un problema generando la remision :(");
+                            response.ResponseCode = doc.aFolio;
+                            response.ResponseContent = JsonConvert.SerializeObject(doc);
+                            break;
+                        default:
+                            break;
+                    }
+
+
+
+
+
+
+
+                    // serializar y enviar la respuesta al cliente
+                    byte[] responseBuffer = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response));
+                    stream.Write(responseBuffer, 0, responseBuffer.Length);
+
+                    client.Close();
                 }
-                string RawRequest = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                Request newreq = JsonConvert.DeserializeObject<Request>(RawRequest);
-
-                // Procesar el mensaje recibido
-                Response response = new Response();
-                eventLog.WriteEntry($"Trabajo recibido: {newreq.Work}");
-                switch (newreq.Work)
+                else
                 {
-                    case 0:
-                        
-                        break;
-                    case 1://agenerar remision
-                        SDK.tDocumento doc = GenerateRemision(eventLog, newreq);
-                        if (doc.aFolio != 0)
-                            eventLog.WriteEntry($"Remision Generada Exitosamente, folio: {doc.aFolio}");
-                        else
-                            eventLog.WriteEntry("Parece que hubo un problema generando la remision :(");
-                        response.ResponseCode = doc.aFolio;
-                        response.ResponseContent = JsonConvert.SerializeObject(doc);
-                        break;
-                    default:
-                        break;
+                    Thread.Sleep(100);
                 }
-
-
-                
-               
-
-                
-
-                // serializar y enviar la respuesta al cliente
-                byte[] responseBuffer = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response));
-                stream.Write(responseBuffer, 0, responseBuffer.Length);
-
-                client.Close();
             }
+            listener.Stop();
+            eventLog.WriteEntry("Listener Apagado");
         }
         catch (Exception ex)
         {
             // Captura cualquier excepción y registra el mensaje en el EventLog
             eventLog.WriteEntry("Error en el servidor TCP: " + ex.Message, EventLogEntryType.Error);
+            serverThread.Interrupt();
         }
+
+
     }
 
     #region Funciones
-    
+
 
     private static SDK.tDocumento GenerateRemision(EventLog log, Request req)
     {
@@ -166,7 +180,7 @@ public class TCPServer
             lDocto.aFolio = folio;
 
             lError = SDK.fAltaDocumento(ref idDocto, ref lDocto);
-            if(lError != 0)
+            if (lError != 0)
             {
                 log.WriteEntry($"Problema en Alta de Documento: {SDK.rError(lError)}");
                 lDocto.aFolio = 0;
@@ -174,9 +188,32 @@ public class TCPServer
             }
             else
             {
+                #region Generar Movimiento
+
+                //este es requerido, ya que sin el, el documento no aparece en la lista de pendientes, por default se generara un movimiento con cargo de hospitalizacion.
+
+                SDK.tMovimiento lMovimiento = new SDK.tMovimiento();
+
+                lMovimiento.aCodAlmacen = "1";
+                lMovimiento.aCodProdSer = "_HPENSION";
+                lMovimiento.aPrecio = 0;
+                lMovimiento.aUnidades = 1;
+
+                int idMovto = 0;
+
+                lError = SDK.fAltaMovimiento(idDocto, ref idMovto, ref lMovimiento);
+                if (lError != 0)
+                {
+                    log.WriteEntry($"Error al generar Movimiento: {SDK.rError(lError)}");
+                }
+                else
+                {
+                    log.WriteEntry($"Movimiento Generado y asignado Exitosamente, id: {idMovto}");
+                }
+                #endregion
                 log.WriteEntry($"Documento Generado Exitosamente: id doc: {lDocto.aFolio}");
                 //posicionar puntero en campo objetivo para actualizar los campos
-                lError = SDK.fPosUltimoDocumento();
+                lError = SDK.fPosUltimoDocumento();//probablemente es mejor buscarlo por su identificador, pero asi no deberia haber bronca
                 if(lError != 0)
                 {
                     log.WriteEntry($"No se encontro el documento para actualizar las tablas con los datos proporcionados de Observaciones: {SDK.rError(lError)}");
@@ -216,6 +253,7 @@ public class TCPServer
                         
                     }
                 }
+                
                 return lDocto;
             }
         }
@@ -228,6 +266,7 @@ public class TCPServer
 
     public void Stop()
     {
-        listener.Stop();
+        interrupt = true;
+        serverThread.Join();
     }
 }

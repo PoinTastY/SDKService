@@ -93,11 +93,13 @@ namespace SDKService
             SDK.fCierraEmpresa();
             eventLog1.WriteEntry("Empresa cerrada");
 
+            server.Stop();
+            eventLog1.WriteEntry("TCPServer stopped");
+
             SDK.fTerminaSDK();
             eventLog1.WriteEntry("SDK Liberado");
 
-            server.Stop();
-            eventLog1.WriteEntry("TCPServer stopped");
+            
         }
 
         private Config ReadConfig(string filePath)

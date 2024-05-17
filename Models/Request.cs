@@ -16,12 +16,9 @@ namespace SDKService.Models
         }
         public int Work { get; set; }
         public string SerialDocto { get; set; }
-        public string SerialEntity1 { get; set; }
-        public string SerialEntity2 { get; set; }
-        public string SerialEntity3 {  get; set; }
-        public string SerialEntity4 {  get; set; }
-        public string SerialEntity5 { get; set; }
-        public string SerialEntity6 { get; set; }
-        public string RawRequest {  get; set; }
+        public string Observaciones { get; set; }
+        public string cTextoExtra1 { get; set; }
+        public string cTextoExtra2 { get; set; }
+        public string cTextoExtra3 { get; set; }
     }
 }

@@ -45,6 +45,7 @@ namespace SDKService
                 {
                     //si queremos iniciar sesion, debe ser antes del setnombre paq
                     SDK.fInicioSesionSDK(config.User, config.Password);
+                    eventLog1.WriteEntry("Sesion Iniciada en SDK");
                 }
                 catch(Exception ex)
                 {
@@ -55,10 +56,11 @@ namespace SDKService
                 lError = SDK.fSetNombrePAQ(config.NombrePAQ);
                 if (lError != 0)
                 {
-                    SDK.rError(lError);
+                    eventLog1.WriteEntry($"No se pudo cargar el sistema {config.NombrePAQ}: {SDK.rError(lError)}");
                 }
                 else
                 {
+                    eventLog1.WriteEntry($"SDK: Sistema {config.NombrePAQ} cargado exitosamente");
                     //indicar la ruta de la empresa a utilizar
                     lError = SDK.fAbreEmpresa(config.RutaEmpresa);
                     if (lError != 0)
@@ -69,10 +71,12 @@ namespace SDKService
                     {
                         eventLog1.WriteEntry("Empresa abierta exitosamente");
                     }
-                    eventLog1.WriteEntry("Starting tcp server...");
-                    server.Start();
+                    
                 }
-            }catch (Exception e)
+                eventLog1.WriteEntry("Starting tcp server...");
+                server.Start();
+            }
+            catch (Exception e)
             {
                 eventLog1.WriteEntry($"Error: {e}");
 
@@ -88,8 +92,10 @@ namespace SDKService
             //complementarios (igual deben estar xD)
             SDK.fCierraEmpresa();
             eventLog1.WriteEntry("Empresa cerrada");
+
             SDK.fTerminaSDK();
             eventLog1.WriteEntry("SDK Liberado");
+
             server.Stop();
             eventLog1.WriteEntry("TCPServer stopped");
         }

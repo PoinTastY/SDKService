@@ -48,14 +48,25 @@ public class TCPServer
                 eventLog.WriteEntry("Cliente conectado desde " + ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString(), EventLogEntryType.Information);
 
                 Stream stream = client.GetStream();
-                byte[] buffer = new byte[1024];
-                int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                string RawRequest = Encoding.ASCII.GetString(buffer, 0, bytesRead);
+                MemoryStream memory = new MemoryStream();
+                byte[] buffer = new byte[4096];
+                int bytesRead = 0;
+                while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    memory.Write(buffer, 0, bytesRead);
+                    if (bytesRead < buffer.Length)
+                        break;
+
+                    byte[] newBuffer = new byte[buffer.Length * 2];
+                    Array.Copy(buffer, newBuffer, bytesRead);
+                    buffer = newBuffer;
+                }
+                string RawRequest = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                 Request newreq = JsonConvert.DeserializeObject<Request>(RawRequest);
 
-
+                // Procesar el mensaje recibido
                 Response response = new Response();
-
+                eventLog.WriteEntry($"Trabajo recibido: {newreq.Work}");
                 switch (newreq.Work)
                 {
                     case 0:
@@ -63,6 +74,10 @@ public class TCPServer
                         break;
                     case 1://agenerar remision
                         SDK.tDocumento doc = GenerateRemision(eventLog, newreq);
+                        if (doc.aFolio != 0)
+                            eventLog.WriteEntry($"Remision Generada Exitosamente, folio: {doc.aFolio}");
+                        else
+                            eventLog.WriteEntry("Parece que hubo un problema generando la remision :(");
                         response.ResponseCode = doc.aFolio;
                         response.ResponseContent = JsonConvert.SerializeObject(doc);
                         break;
@@ -72,12 +87,12 @@ public class TCPServer
 
 
                 
-                eventLog.WriteEntry("Mensaje recibido: " + EventLogEntryType.Information);
+               
 
-                // Procesar el mensaje recibido
+                
 
                 // serializar y enviar la respuesta al cliente
-                byte[] responseBuffer = Encoding.ASCII.GetBytes(JsonConvert.SerializeObject(response));
+                byte[] responseBuffer = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response));
                 stream.Write(responseBuffer, 0, responseBuffer.Length);
 
                 client.Close();
@@ -98,30 +113,37 @@ public class TCPServer
         #region UnpackJson
 
         SDK.tDocumento lDocto = JsonConvert.DeserializeObject<SDK.tDocumento>(req.SerialDocto);
-        CasoClinico casoClinico = JsonConvert.DeserializeObject<CasoClinico>(req.SerialEntity1);
-        Patient patient = JsonConvert.DeserializeObject<Patient>(req.SerialEntity2);
-        Rooms room = JsonConvert.DeserializeObject<Rooms>(req.SerialEntity3);
-        Medic medic = JsonConvert.DeserializeObject<Medic>(req.SerialEntity4);
-        Diagnostico diagnostico = JsonConvert.DeserializeObject<Diagnostico>(req.SerialEntity5);
-
+        log.WriteEntry("Json Deserializado");
         #endregion
 
         int lError = 0;//4 error management
 
         #region Find or Create Client
-
-        lError = SDK.fBuscaCteProv(lDocto.aCodigoCteProv);
-
-        if(lError != 0)
+        try
         {
-            //asumimos que no existe, entonces creamos 
-            log.WriteEntry($"No se encontro la habitacion: {room.Nombre}, Intentando crearlo");
-            int aIdCteProv = 0;
-            SDK.ClienteProveedor cliente = new SDK.ClienteProveedor();
-            cliente.cRazonSocial = room.Nombre;
-            cliente.cCodigoCliente = lDocto.aCodigoCteProv;
-            lError = SDK.fAltaCteProv(ref aIdCteProv, cliente);
+            //buscandoCliente
+            log.WriteEntry("Buscando Habitacion para asignar cliente:");
+            lError = SDK.fBuscaCteProv(lDocto.aCodigoCteProv);
+
+            if (lError != 0)
+            {
+                //asumimos que no existe, entonces creamos 
+                log.WriteEntry($"No se encontro la habitacion: {lDocto.aCodigoCteProv}, Error: {SDK.rError(lError)}");
+                return lDocto;
+            }
+            else
+            {
+                log.WriteEntry($"Se  encontro una coincidencia del cliente: {lDocto.aCodigoCteProv} en Contpaqi");
+            }
         }
+        catch (Exception ex)
+        {
+            log.WriteEntry($"Excepcion en Gestion de cliente: {ex}");
+            //lDocto.aCodigoCteProv = new StringBuilder(SDK.constantes.kLongCodigo).ToString();
+            return lDocto;
+        }
+
+
 
         #endregion
 
@@ -130,6 +152,8 @@ public class TCPServer
         double folio = 0;
         int idDocto = 0;
 
+        //trying to retrieve next Folio
+        log.WriteEntry($"Intentando conseguir folio...");
         lError = SDK.fSiguienteFolio(lDocto.aCodConcepto, serie, ref folio);
         if (lError != 0)
         {
@@ -138,13 +162,15 @@ public class TCPServer
         }
         else
         {
+            log.WriteEntry($"Folio Obtenido: {folio}");
             lDocto.aFolio = folio;
-           
 
             lError = SDK.fAltaDocumento(ref idDocto, ref lDocto);
             if(lError != 0)
             {
                 log.WriteEntry($"Problema en Alta de Documento: {SDK.rError(lError)}");
+                lDocto.aFolio = 0;
+                return lDocto;
             }
             else
             {
@@ -153,13 +179,12 @@ public class TCPServer
                 lError = SDK.fPosUltimoDocumento();
                 if(lError != 0)
                 {
-                    log.WriteEntry($"No se encontro el documento para actualizar las tablas con los datos proporcionados: {SDK.rError(lError)}");
+                    log.WriteEntry($"No se encontro el documento para actualizar las tablas con los datos proporcionados de Observaciones: {SDK.rError(lError)}");
                 }
                 else
                 {
                     SDK.fEditarDocumento();//may need to add another filter here just in case
-                    string observaciones = $"Paciente: {patient.Nombre}\nMedico: {medic.Nombre}\nDiagnostico: {diagnostico.Contenido}";
-                    lError = SDK.fSetDatoDocumento("cObservaciones", observaciones);
+                    lError = SDK.fSetDatoDocumento("cObservaciones", req.Observaciones);
                     if(lError != 0)
                     {
                         log.WriteEntry($"Error Actualizando el campo: Observaciones: {SDK.rError(lError)}");
@@ -167,7 +192,28 @@ public class TCPServer
                     }
                     else
                     {
-                        SDK.fGuardaDocumento();
+                        lError = SDK.fSetDatoDocumento("cTextoExtra1", req.cTextoExtra1);
+                        if(lError != 0)
+                        {
+                            log.WriteEntry($"Error al modificar cTextoExtra1: {SDK.rError(lError)}");
+
+                        }
+                        else
+                        {
+                            SDK.fSetDatoDocumento("cTextoExtra2", req.cTextoExtra2);
+                            SDK.fSetDatoDocumento("cTextoExtra3", req.cTextoExtra3);
+                            
+                            lError = SDK.fGuardaDocumento();
+                            if(lError != 0)
+                            {
+                                log.WriteEntry($"Hubo un error al guardar los cambios: {SDK.rError(lError)}");
+                            }
+                            else
+                            {
+                                log.WriteEntry("Campos extras actualizados correctamente");
+                            }
+                        }
+                        
                     }
                 }
                 return lDocto;

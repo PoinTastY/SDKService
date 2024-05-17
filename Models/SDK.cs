@@ -101,7 +101,7 @@ namespace SDKService.Models
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 4)]
-        public struct ClienteProveedor
+        public struct tCteProv
         {
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = constantes.kLongCodigo)]
             public string cCodigoCliente;
@@ -391,10 +391,10 @@ namespace SDKService.Models
         public static extern int fBuscaIdCteProv(int aIdCteProv);
 
         [DllImport("MGWServicios.dll")]
-        public static extern int fBuscaCteProv(string aBuscaCteProv);
+        public static extern int fBuscaCteProv(string aCodCteProv);
 
         [DllImport("MGWServicios.dll")]
-        public static extern int fAltaCteProv(ref int aIdCteProv, ClienteProveedor astCteProv);
+        public static extern int fAltaCteProv(ref int aIdCteProv, tCteProv astCteProv);
 
         #endregion
 

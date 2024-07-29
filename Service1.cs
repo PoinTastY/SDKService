@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.ServiceProcess;
+using System.Threading;
 
 namespace SDKService
 {
@@ -51,28 +52,48 @@ namespace SDKService
                 {
                     eventLog1.WriteEntry($"No se pudo Iniciar sesion en el SDK: {ex}");
                 }
+                var attempts = 0;
 
                 //indicar con que sistema se va a trabajar
-                lError = SDK.fSetNombrePAQ(config.NombrePAQ);
-                if (lError != 0)
+                while (true)
                 {
-                    eventLog1.WriteEntry($"No se pudo cargar el sistema {config.NombrePAQ}: {SDK.rError(lError)}");
-                }
-                else
-                {
-                    eventLog1.WriteEntry($"SDK: Sistema {config.NombrePAQ} cargado exitosamente");
-                    //indicar la ruta de la empresa a utilizar
-                    lError = SDK.fAbreEmpresa(config.RutaEmpresa);
+                    lError = SDK.fSetNombrePAQ(config.NombrePAQ);
                     if (lError != 0)
                     {
-                        eventLog1.WriteEntry($"Error: {SDK.rError(lError)}");
+                        eventLog1.WriteEntry($"No se pudo cargar el sistema {config.NombrePAQ}: {SDK.rError(lError)}, reintentando ({++attempts})...");
+                        System.Threading.Thread.Sleep(10000);
+                        if(attempts > 5)
+                        {
+                            throw new Exception($"No se pudo cargar el sistema (fsetNombrePAQ: {config.NombrePAQ}), se detiene el servicio");
+                        }
                     }
                     else
                     {
-                        SDK.fCierraEmpresa();
-                        eventLog1.WriteEntry("Empresa abierta exitosamente");
+                        eventLog1.WriteEntry($"SDK: Sistema {config.NombrePAQ} cargado exitosamente (tomo {attempts} {((attempts > 1) ? "intentos":"intento")})");
+                        break;
                     }
-                    
+                }
+
+
+                //indicar la ruta de la empresa a utilizar
+                var intentoInicioSesion = 0;
+                while (true)
+                {
+                    lError = SDK.fAbreEmpresa(config.RutaEmpresa);
+                    if (lError != 0)
+                    {
+                        eventLog1.WriteEntry($"Reintentando abrir empresa ({++intentoInicioSesion})...");
+                        if (intentoInicioSesion > 4)
+                        {
+                            eventLog1.WriteEntry($"No se pudo abrir la empresa: {SDK.rError(lError)}");
+                        }
+                        Thread.Sleep(1000);
+                    }
+                    else
+                    {
+                        eventLog1.WriteEntry($"Empresa abierta exitosamente en {config.RutaEmpresa}");
+                        break;
+                    }
                 }
                 eventLog1.WriteEntry("Starting tcp server...");
                 server.Start(config);

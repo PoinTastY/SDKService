@@ -69,12 +69,13 @@ namespace SDKService
                     }
                     else
                     {
+                        SDK.fCierraEmpresa();
                         eventLog1.WriteEntry("Empresa abierta exitosamente");
                     }
                     
                 }
                 eventLog1.WriteEntry("Starting tcp server...");
-                server.Start();
+                server.Start(config);
             }
             catch (Exception e)
             {

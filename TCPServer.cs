@@ -15,6 +15,8 @@ public class TCPServer
     private EventLog eventLog;
     private Thread serverThread;
     private bool interrupt;
+    private Config config;
+    private int lError;
 
     public TCPServer(int port, EventLog eventLog)
     {
@@ -24,11 +26,12 @@ public class TCPServer
         this.interrupt = false;
     }
 
-    public void Start()
+    public void Start(Config settings)
     {
         try
         {
             serverThread.Start();
+            config = settings;
             eventLog.WriteEntry("Servidor TCP iniciado. Esperando conexiones...", EventLogEntryType.Information);
         }
         catch (Exception ex)
@@ -77,6 +80,7 @@ public class TCPServer
 
                             break;
                         case 1://agenerar remision
+                            eventLog.WriteEntry("Empresa lista para nuevo registro...");
                             SDK.tDocumento doc = GenerateRemision(eventLog, newreq);
                             if (doc.aFolio != 0)
                                 eventLog.WriteEntry($"Remision Generada Exitosamente, folio: {doc.aFolio}");
@@ -84,16 +88,32 @@ public class TCPServer
                                 eventLog.WriteEntry("Parece que hubo un problema generando la remision :(");
                             response.ResponseCode = doc.aFolio;
                             response.ResponseContent = JsonConvert.SerializeObject(doc);
+                            
                             break;
+
+                            //lError = SDK.fAbreEmpresa(config.RutaEmpresa);
+                            //if(lError != 0)
+                            //{
+                            //    eventLog.WriteEntry($"Error: {SDK.rError(lError)}");
+                            //    response.ResponseCode = 0;
+                            //    break;
+                            //}
+                            //else
+                            //{
+                            //    eventLog.WriteEntry("Empresa lista para nuevo registro...");
+                            //    SDK.tDocumento doc = GenerateRemision(eventLog, newreq);
+                            //    if (doc.aFolio != 0)
+                            //        eventLog.WriteEntry($"Remision Generada Exitosamente, folio: {doc.aFolio}");
+                            //    else
+                            //        eventLog.WriteEntry("Parece que hubo un problema generando la remision :(");
+                            //    response.ResponseCode = doc.aFolio;
+                            //    response.ResponseContent = JsonConvert.SerializeObject(doc);
+                            //    SDK.fCierraEmpresa();
+                            //    break;
+                            //}
                         default:
                             break;
                     }
-
-
-
-
-
-
 
                     // serializar y enviar la respuesta al cliente
                     byte[] responseBuffer = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(response));
@@ -122,145 +142,197 @@ public class TCPServer
     #region Funciones
 
 
-    private static SDK.tDocumento GenerateRemision(EventLog log, Request req)
+    private SDK.tDocumento GenerateRemision(EventLog log, Request req)
     {
+        SDK.tDocumento lDocto = new SDK.tDocumento
+        {
+            aFolio = 0,
+        };
         #region UnpackJson
-
-        SDK.tDocumento lDocto = JsonConvert.DeserializeObject<SDK.tDocumento>(req.SerialDocto);
-        log.WriteEntry("Json Deserializado");
-        #endregion
-
-        int lError = 0;//4 error management
-
-        #region Find or Create Client
         try
         {
-            //buscandoCliente
-            log.WriteEntry("Buscando Habitacion para asignar cliente:");
-            lError = SDK.fBuscaCteProv(lDocto.aCodigoCteProv);
-
-            if (lError != 0)
+            log.WriteEntry("Desempaquetando JSON...");
+            int attempts = 0;
+            while (true)
             {
-                //asumimos que no existe, entonces creamos 
-                log.WriteEntry($"No se encontro la habitacion: {lDocto.aCodigoCteProv}, Error: {SDK.rError(lError)}");
-                return lDocto;
-            }
-            else
-            {
-                log.WriteEntry($"Se  encontro una coincidencia del cliente: {lDocto.aCodigoCteProv} en Contpaqi");
-            }
-        }
-        catch (Exception ex)
-        {
-            log.WriteEntry($"Excepcion en Gestion de cliente: {ex}");
-            //lDocto.aCodigoCteProv = new StringBuilder(SDK.constantes.kLongCodigo).ToString();
-            return lDocto;
-        }
-
-
-
-        #endregion
-
-        #region Build Document
-        StringBuilder serie = new StringBuilder(lDocto.aSerie); //we need a string builder
-        double folio = 0;
-        int idDocto = 0;
-
-        //trying to retrieve next Folio
-        log.WriteEntry($"Intentando conseguir folio...");
-        lError = SDK.fSiguienteFolio(lDocto.aCodConcepto, serie, ref folio);
-        if (lError != 0)
-        {
-            log.WriteEntry($"Problema en obtencion de siguiente folio: {SDK.rError(lError)}");
-            lDocto.aFolio = folio;
-        }
-        else
-        {
-            log.WriteEntry($"Folio Obtenido: {folio}");
-            lDocto.aFolio = folio;
-
-            lError = SDK.fAltaDocumento(ref idDocto, ref lDocto);
-            if (lError != 0)
-            {
-                log.WriteEntry($"Problema en Alta de Documento: {SDK.rError(lError)}");
-                lDocto.aFolio = 0;
-                return lDocto;
-            }
-            else
-            {
-                #region Generar Movimiento
-
-                //este es requerido, ya que sin el, el documento no aparece en la lista de pendientes, por default se generara un movimiento con cargo de hospitalizacion.
-
-                SDK.tMovimiento lMovimiento = new SDK.tMovimiento();
-
-                lMovimiento.aCodAlmacen = "1";
-                lMovimiento.aCodProdSer = "_HPENSION";
-                lMovimiento.aPrecio = 0;
-                lMovimiento.aUnidades = 1;
-
-                int idMovto = 0;
-
-                lError = SDK.fAltaMovimiento(idDocto, ref idMovto, ref lMovimiento);
-                if (lError != 0)
+                try
                 {
-                    log.WriteEntry($"Error al generar Movimiento: {SDK.rError(lError)}");
+                    lDocto = JsonConvert.DeserializeObject<SDK.tDocumento>(req.SerialDocto);
+                    log.WriteEntry("Json Deserializado");
+                    break;
                 }
-                else
+                catch
                 {
-                    log.WriteEntry($"Movimiento Generado y asignado Exitosamente, id: {idMovto}");
-                }
-                #endregion
-                log.WriteEntry($"Documento Generado Exitosamente: id doc: {lDocto.aFolio}");
-                //posicionar puntero en campo objetivo para actualizar los campos
-                lError = SDK.fPosUltimoDocumento();//probablemente es mejor buscarlo por su identificador, pero asi no deberia haber bronca
-                if(lError != 0)
-                {
-                    log.WriteEntry($"No se encontro el documento para actualizar las tablas con los datos proporcionados de Observaciones: {SDK.rError(lError)}");
-                }
-                else
-                {
-                    SDK.fEditarDocumento();//may need to add another filter here just in case
-                    lError = SDK.fSetDatoDocumento("cObservaciones", req.Observaciones);
-                    if(lError != 0)
+                    log.WriteEntry("Reintentando desempaquetado...");
+                    Thread.Sleep(1000);
+                    if (attempts++ > 4)
                     {
-                        log.WriteEntry($"Error Actualizando el campo: Observaciones: {SDK.rError(lError)}");
-                        SDK.fCancelarModificacionDocumento();
+                        log.WriteEntry("No se pudo desempaquetar");
+                        return lDocto;
+                    }
+                }
+            }
+            lError = SDK.fAbreEmpresa(config.RutaEmpresa);
+            if(lError !=0 )
+            {
+                log.WriteEntry($"Error abriendo empreza para ingresar registro: {SDK.rError(lError)}");
+                return lDocto;
+            }
+            else
+            {
+                #region Find or Create Client
+                try
+                {
+                    //buscandoCliente
+                    log.WriteEntry("Buscando Habitacion para asignar cliente:");
+                    lError = SDK.fBuscaCteProv(lDocto.aCodigoCteProv);
+
+                    if (lError != 0)
+                    {
+                        //asumimos que no existe, entonces creamos 
+                        log.WriteEntry($"No se encontro la habitacion: {lDocto.aCodigoCteProv}, Error: {SDK.rError(lError)}");
+                        SDK.fCierraEmpresa();
+                        return lDocto;
                     }
                     else
                     {
-                        lError = SDK.fSetDatoDocumento("cTextoExtra1", req.cTextoExtra1);
-                        if(lError != 0)
-                        {
-                            log.WriteEntry($"Error al modificar cTextoExtra1: {SDK.rError(lError)}");
+                        log.WriteEntry($"Se  encontro una coincidencia del cliente: {lDocto.aCodigoCteProv} en Contpaqi");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.WriteEntry($"Excepcion en Gestion de cliente: {ex}");
+                    //lDocto.aCodigoCteProv = new StringBuilder(SDK.constantes.kLongCodigo).ToString();
+                    SDK.fCierraEmpresa();
+                    return lDocto;
+                }
 
+
+
+                #endregion
+
+                #region Build Document
+                StringBuilder serie = new StringBuilder(lDocto.aSerie); //we need a string builder
+                double folio = 0;
+                int idDocto = 0;
+
+                //trying to retrieve next Folio
+                log.WriteEntry($"Intentando conseguir folio...");
+                lError = SDK.fSiguienteFolio(lDocto.aCodConcepto, serie, ref folio);
+                if (lError != 0)
+                {
+                    log.WriteEntry($"Problema en obtencion de siguiente folio: {SDK.rError(lError)}");
+                    lDocto.aFolio = folio;
+                }
+                else
+                {
+                    log.WriteEntry($"Folio Obtenido: {folio}");
+                    lDocto.aFolio = folio;
+
+                    lError = SDK.fAltaDocumento(ref idDocto, ref lDocto);
+                    if (lError != 0)
+                    {
+                        log.WriteEntry($"Problema en Alta de Documento: {SDK.rError(lError)}");
+                        lDocto.aFolio = 0;
+                        SDK.fCierraEmpresa();
+                        return lDocto;
+                    }
+                    else
+                    {
+                        #region Generar Movimiento
+
+                        //este es requerido, ya que sin el, el documento no aparece en la lista de pendientes, por default se generara un movimiento con cargo de hospitalizacion.
+                        SDK.tMovimiento lMovimiento = new SDK.tMovimiento();
+
+                        lMovimiento.aCodAlmacen = config.CodAlmacen;
+                        lMovimiento.aCodProdSer = config.CodProdSer;
+                        lMovimiento.aPrecio = config.Precio;
+                        lMovimiento.aUnidades = config.Unidades;
+
+                        int idMovto = 0;
+
+                        lError = SDK.fAltaMovimiento(idDocto, ref idMovto, ref lMovimiento);
+                        if (lError != 0)
+                        {
+                            log.WriteEntry($"Error al generar Movimiento: {SDK.rError(lError)}");
                         }
                         else
                         {
-                            SDK.fSetDatoDocumento("cTextoExtra2", req.cTextoExtra2);
-                            SDK.fSetDatoDocumento("cTextoExtra3", req.cTextoExtra3);
-                            
-                            lError = SDK.fGuardaDocumento();
-                            if(lError != 0)
+                            log.WriteEntry($"Movimiento Generado y asignado Exitosamente, id: {idMovto}");
+                        }
+                        #endregion
+                        log.WriteEntry($"Documento Generado Exitosamente: id doc: {lDocto.aFolio}");
+                        //posicionar puntero en campo objetivo para actualizar los campos
+                        lError = SDK.fPosUltimoDocumento();//probablemente es mejor buscarlo por su identificador, pero asi no deberia haber bronca
+                        if (lError != 0)
+                        {
+                            log.WriteEntry($"No se encontro el documento para actualizar las tablas con los datos proporcionados de Observaciones: {SDK.rError(lError)}");
+                        }
+                        else
+                        {
+                            SDK.fEditarDocumento();//may need to add another filter here just in case
+                            lError = SDK.fSetDatoDocumento("cObservaciones", req.Observaciones);
+                            if (lError != 0)
                             {
-                                log.WriteEntry($"Hubo un error al guardar los cambios: {SDK.rError(lError)}");
+                                log.WriteEntry($"Error Actualizando el campo: Observaciones: {SDK.rError(lError)}");
+                                SDK.fCancelarModificacionDocumento();
                             }
                             else
                             {
-                                log.WriteEntry("Campos extras actualizados correctamente");
+                                lError = SDK.fSetDatoDocumento("cTextoExtra1", req.cTextoExtra1);
+                                if (lError != 0)
+                                {
+                                    log.WriteEntry($"Error al modificar cTextoExtra1: {SDK.rError(lError)}");
+
+                                }
+                                else
+                                {
+                                    SDK.fSetDatoDocumento("cTextoExtra2", req.cTextoExtra2);
+                                    SDK.fSetDatoDocumento("cTextoExtra3", req.cTextoExtra3);
+
+                                    lError = SDK.fGuardaDocumento();
+                                    if (lError != 0)
+                                    {
+                                        log.WriteEntry($"Hubo un error al guardar los cambios: {SDK.rError(lError)}");
+                                    }
+                                    else
+                                    {
+                                        log.WriteEntry("Campos extras actualizados correctamente");
+                                    }
+                                }
+
                             }
                         }
-                        
+                        SDK.fCierraEmpresa();
+                        return lDocto;
                     }
                 }
-                
+                #endregion
+                SDK.fCierraEmpresa();
                 return lDocto;
             }
+            
         }
-        #endregion
-        return lDocto;
+        catch (JsonSerializationException jsonEx)
+        {
+            log.WriteEntry($"Error de serialización JSON: {jsonEx.Message}");
+            lDocto.aFolio = 0;
+            return lDocto;
+        }
+        catch (DivideByZeroException divEx)
+        {
+            log.WriteEntry($"Error de división por cero: {divEx.Message}");
+            return lDocto;
+        }
+        catch (Exception ex)
+        {
+            log.WriteEntry($"Ocurrió un error general: {ex.Message}");
+            SDK.fCierraEmpresa();
+            return lDocto;
+        }
 
-        
+        #endregion
+
     }
     #endregion
 

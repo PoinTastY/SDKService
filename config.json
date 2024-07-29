@@ -3,5 +3,9 @@
   "NombrePAQ": "CONTPAQ I COMERCIAL",
   "RutaEmpresa": "C:\\Compac\\Empresas\\adPATRONATOPROHOSPIT",
   "User": "KEVIN",
-  "Password": "index"
+  "Password": "index",
+  "CodAlmacen": "1",
+  "CodProdSer": "_HPENSION",
+  "Precio": 0,
+  "Unidades": 1
 }

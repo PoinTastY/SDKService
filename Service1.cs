@@ -55,24 +55,32 @@ namespace SDKService
                 var attempts = 0;
 
                 //indicar con que sistema se va a trabajar
-                while (true)
+                try
                 {
-                    lError = SDK.fSetNombrePAQ(config.NombrePAQ);
-                    if (lError != 0)
+                    while (true)
                     {
-                        eventLog1.WriteEntry($"No se pudo cargar el sistema {config.NombrePAQ}: {SDK.rError(lError)}, reintentando ({++attempts})...");
-                        System.Threading.Thread.Sleep(10000);
-                        if(attempts > 5)
+                        lError = SDK.fSetNombrePAQ(config.NombrePAQ);
+                        if (lError != 0)
                         {
-                            throw new Exception($"No se pudo cargar el sistema (fsetNombrePAQ: {config.NombrePAQ}), se detiene el servicio");
+                            eventLog1.WriteEntry($"No se pudo cargar el sistema {config.NombrePAQ}: {SDK.rError(lError)}, reintentando ({++attempts})...");
+                            System.Threading.Thread.Sleep(10000);
+                            if (attempts > 5)
+                            {
+                                throw new Exception($"No se pudo cargar el sistema (fsetNombrePAQ: {config.NombrePAQ}), se detiene el servicio");
+                            }
+                        }
+                        else
+                        {
+                            eventLog1.WriteEntry($"SDK: Sistema {config.NombrePAQ} cargado exitosamente (tomo {attempts} {((attempts > 1) ? "intentos" : "intento")})");
+                            break;
                         }
                     }
-                    else
-                    {
-                        eventLog1.WriteEntry($"SDK: Sistema {config.NombrePAQ} cargado exitosamente (tomo {attempts} {((attempts > 1) ? "intentos":"intento")})");
-                        break;
-                    }
                 }
+                catch (Exception ex)
+                {
+                    eventLog1.WriteEntry($"Error en SDK.fSetNombrePAQ: {ex.Message} (Inner:{ex.InnerException})");
+                }
+
 
 
                 //indicar la ruta de la empresa a utilizar
